@@ -88,13 +88,19 @@ beside it `uploadedItems.json`, nopCommerce's list of what an archive holds, whi
 asks of every package):
 
 1. **Admin → Configuration → Local plugins → Upload plugin or theme**, and choose the archive.
-2. Find **Bitcoin (sattle.me)** in the list (group "Payment methods"), and click **Install**.
-3. **Restart application to apply changes** (at the top of the list). nopCommerce installs the
-   plugin as it starts again: its tables, its settings, its texts in each of the store's languages,
-   its scheduled task, and its blocks on the order's pages.
+   nopCommerce says "1 plugins and 0 themes have been uploaded": it keeps the plugin aside
+   (`Plugins/Uploaded/`) until it restarts, so the plugin is not in the list yet.
+2. **Restart application to apply changes** (at the top of the list). nopCommerce deploys the
+   plugin as it starts again.
+3. Once it has restarted, find **Bitcoin (sattle.me)** in the list (group "Payment methods"), and
+   click **Install**.
+4. **Restart application to apply changes** again. nopCommerce installs the plugin as it starts
+   again: its tables, its settings, its texts in each of the store's languages, its scheduled task,
+   and its blocks on the order's pages.
 
-Or copy the archive's folder into nopCommerce's `Plugins/` directory, and install it from the list
-as above. To update the plugin, upload the new archive, and restart.
+Or copy the archive's folder into nopCommerce's `Plugins/` directory, restart nopCommerce
+(**Reload list of plugins**, at the top of the list, restarts it), and install it from the list as
+above (steps 3 and 4). To update the plugin, upload the new archive, and restart.
 
 **Uninstalling** the plugin deletes its tables, that is its invoices and their checks: it refuses
 while a payment may still come (an invoice that can still be paid, or a payment being confirmed),
