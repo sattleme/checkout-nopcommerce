@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The plugin's tests (NUnit, as nopCommerce's own tests), against nopCommerce's assemblies built
+    from its pinned source. The SDK is faked at the plugin's seam (ISattlemeGateway), the database is
+    SQLite through linq2db (as nopCommerce's tests run theirs), and the plugin's archive, built with
+    the plugin, is checked as it ships.
+  -->
+  <PropertyGroup>
+    <AssemblyName>Nop.Plugin.Payments.Sattleme.Tests</AssemblyName>
+    <RootNamespace>Nop.Plugin.Payments.Sattleme.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!--
+      Test names say what is tested, in words (CA1707: Completes_the_order_once), and need no XML
+      comment of their own (CS1591); NUnit's fixtures dispose what each test made in their TearDown
+      (CA1001); their arrays of expected values are written where they are compared (CA1861); the
+      SDK's logger is called as the SDK calls it (CA1848).
+    -->
+    <NoWarn>$(NoWarn);CA1707;CA1001;CS1591;CA1861;CA1848</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Nop.Plugin.Payments.Sattleme/Nop.Plugin.Payments.Sattleme.csproj" />
+    <ProjectReference Include="../../src/Embedded/Checkout/Nop.Plugin.Payments.Sattleme.Sdk.csproj" />
+    <ProjectReference Include="../../src/Embedded/Secp256k1/Nop.Plugin.Payments.Sattleme.Secp256k1.csproj" />
+    <ProjectReference Include="../../src/Embedded/QrCode/Nop.Plugin.Payments.Sattleme.QrCode.csproj" />
+    <ProjectReference Include="../../tools/Sattleme.Nop.Pins/Sattleme.Nop.Pins.csproj" />
+    <ProjectReference Include="$(NopWebFrameworkProject)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>RepositoryRoot</_Parameter1>
+      <_Parameter2>$(RepositoryRoot)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>PluginPackage</_Parameter1>
+      <_Parameter2>$(RepositoryRoot)artifacts/$(Configuration)/</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>Version</_Parameter1>
+      <_Parameter2>$(Version)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

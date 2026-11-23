@@ -1,0 +1,10 @@
+@model PaymentInfoModel
+@{
+    Layout = "";
+}
+<div class="sattleme-payment-info">
+    @foreach (var paragraph in Model.Paragraphs)
+    {
+        <p>@paragraph</p>
+    }
+</div>

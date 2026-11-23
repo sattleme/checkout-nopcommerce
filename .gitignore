@@ -1,0 +1,17 @@
+# Build output
+bin/
+obj/
+artifacts/
+TestResults/
+
+# nopCommerce's source, fetched at its pinned commit by scripts/nopcommerce.sh
+.nopcommerce/
+
+# e2e/drive.py's bytecode
+__pycache__/
+
+# Editors
+.vs/
+.idea/
+*.user
+*.suo

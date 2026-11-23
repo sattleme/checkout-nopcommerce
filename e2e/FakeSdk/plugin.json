@@ -1,0 +1,11 @@
+{
+  "Group": "Misc",
+  "FriendlyName": "sattle.me end-to-end test (never in a shop)",
+  "SystemName": "Misc.SattlemeE2e",
+  "Version": "1.0.0",
+  "SupportedVersions": [ "5.00" ],
+  "Author": "sattle.me",
+  "DisplayOrder": 100,
+  "FileName": "Nop.Plugin.Misc.SattlemeE2e.dll",
+  "Description": "Replaces the sattle.me payment method's SDK with a fake, for its end-to-end test."
+}

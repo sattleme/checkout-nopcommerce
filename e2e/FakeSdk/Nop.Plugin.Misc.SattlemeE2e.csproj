@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A plugin for the end-to-end test only (e2e/run.sh), never shipped: installed beside the
+    sattle.me payment method in a test shop, it replaces the plugin's one way to the SDK
+    (ISattlemeGateway) with a fake whose payments the test makes. The shipped plugin has no switch
+    for it: only installing this other plugin does it.
+  -->
+  <PropertyGroup>
+    <AssemblyName>Nop.Plugin.Misc.SattlemeE2e</AssemblyName>
+    <RootNamespace>Nop.Plugin.Misc.SattlemeE2e</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <PreserveCompilationContext>false</PreserveCompilationContext>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(NopCommerceDir)src/Libraries/Nop.Core/Nop.Core.csproj" Private="false" />
+    <ProjectReference Include="$(NopCommerceDir)src/Libraries/Nop.Data/Nop.Data.csproj" Private="false" />
+    <ProjectReference Include="$(NopCommerceDir)src/Libraries/Nop.Services/Nop.Services.csproj" Private="false" />
+    <ProjectReference Include="$(NopWebFrameworkProject)" Private="false" />
+    <!-- The payment method's assemblies: nopCommerce loads them from the payment method's folder,
+         before this plugin's, plugin.json's DisplayOrder (100, the payment method's 1) setting the
+         order nopCommerce loads plugins in (PluginsInfo.GetDescriptionFilesAndDescriptors). -->
+    <ProjectReference Include="../../src/Nop.Plugin.Payments.Sattleme/Nop.Plugin.Payments.Sattleme.csproj" Private="false" />
+    <ProjectReference Include="../../src/Embedded/Checkout/Nop.Plugin.Payments.Sattleme.Sdk.csproj" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="plugin.json" />
+    <Content Include="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Its archive, as the payment method's: artifacts/<configuration>/Misc.SattlemeE2e.zip. -->
+  <Target Name="PackageE2ePlugin" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <E2eStage>$(RepositoryRoot)artifacts/$(Configuration)/e2e-stage/</E2eStage>
+    </PropertyGroup>
+    <RemoveDir Directories="$(E2eStage)" />
+    <Copy SourceFiles="$(OutDir)Nop.Plugin.Misc.SattlemeE2e.dll;plugin.json" DestinationFolder="$(E2eStage)Misc.SattlemeE2e/" />
+    <ZipDirectory SourceDirectory="$(E2eStage)" DestinationFile="$(RepositoryRoot)artifacts/$(Configuration)/Misc.SattlemeE2e.zip" Overwrite="true" />
+  </Target>
+
+</Project>

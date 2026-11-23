@@ -1,0 +1,11 @@
+{
+  "Group": "Payment methods",
+  "FriendlyName": "Bitcoin (sattle.me)",
+  "SystemName": "Payments.Sattleme",
+  "Version": "1.0.0",
+  "SupportedVersions": [ "5.00" ],
+  "Author": "sattle.me",
+  "DisplayOrder": 1,
+  "FileName": "Nop.Plugin.Payments.Sattleme.dll",
+  "Description": "Bitcoin payments, in Lightning or on-chain, straight to the merchant's sattle.me wallet: the customer pays on a page of the shop."
+}

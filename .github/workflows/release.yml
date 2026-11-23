@@ -1,0 +1,94 @@
+name: Release
+
+# A maintainer pushes tag vX.Y.Z (= the plugin's version, on main): the checks run again, then the
+# plugin's archive is built at that commit, checked, and kept as this workflow's artifact, with the
+# source the marketplace asks for, from a job a maintainer approves (the protected environment
+# `marketplace`). The plugin is distributed on nopCommerce's marketplace only, which has no
+# publishing channel to push to: the team uploads the archive there (My extensions, Upload
+# extension). No GitHub release. Never from a development or agent session.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  # Before the environment gate, so reviewers are only asked to approve valid releases.
+  verify-tag:
+    name: Verify release tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Tag must match the plugin's version
+        run: |
+          version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)"
+          manifest="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8-sig"))["Version"])' src/Nop.Plugin.Payments.Sattleme/plugin.json)"
+          if [ "$GITHUB_REF_NAME" != "v$version" ] || [ "$manifest" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the plugin's version (Directory.Build.props v$version, plugin.json $manifest)."
+            exit 1
+          fi
+      - name: Tagged commit must be on main
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$GITHUB_REF_NAME points to a commit that is not on main."
+            exit 1
+          fi
+
+  archive:
+    name: The archive for nopCommerce's marketplace
+    needs: [checks, verify-tag]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # The protected environment (required reviewers: a maintainer approves each release; deployment
+    # tags: v*). It holds no secret: nothing is published from here.
+    environment: marketplace
+    env:
+      CI: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.404
+      - name: nopCommerce's source at release-5.00.1
+        run: scripts/nopcommerce.sh "$NOPCOMMERCE_DIR"
+      - name: The pinned copies (sdk/, vendor/)
+        run: dotnet run --project tools/Sattleme.Nop.Pins -c Release -- check
+      # From the lockfiles (locked mode, CI=true), at this very commit; the tests check the
+      # archive file by file, and the SDK's vectors against the assemblies it holds.
+      - name: Build, test, and the archive
+        run: |
+          dotnet restore Nop.Plugin.Payments.Sattleme.sln --locked-mode
+          dotnet build Nop.Plugin.Payments.Sattleme.sln -c Release --no-restore
+          dotnet test tests/Nop.Plugin.Payments.Sattleme.Tests -c Release --no-build
+      # The marketplace reviews the source of each extension: this commit's, the pinned SDK and its
+      # pinned dependencies included (sdk/, vendor/).
+      - name: The archive and its source
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          cp artifacts/Release/Payments.Sattleme-"${GITHUB_REF_NAME#v}".zip "$RUNNER_TEMP/release/"
+          git archive --format=zip --prefix="checkout-nopcommerce-${GITHUB_REF_NAME#v}/" -o "$RUNNER_TEMP/release/checkout-nopcommerce-${GITHUB_REF_NAME#v}-source.zip" HEAD
+          (cd "$RUNNER_TEMP/release" && sha256sum ./*.zip > SHA256SUMS)
+          ls -l "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Payments.Sattleme-${{ github.ref_name }}
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          retention-days: 90

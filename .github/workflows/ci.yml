@@ -1,0 +1,97 @@
+name: CI
+
+# Every pull request and every push to main: nopCommerce's source at its pinned commit, the pinned
+# copies (sdk/, vendor/), the packages from the lockfiles, the build (analyzers, warnings as
+# errors) and the plugin's archive, the coding standard, the tests, what the archive holds, and
+# the brand: scripts/check.sh, step by step; and the end-to-end test in nopCommerce's official
+# image (e2e/run.sh, Docker).
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: Checks (nopCommerce 5.00.1, .NET 10)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The SDK of global.json, exactly. No cache.
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.404
+      - name: Where .NET is
+        run: |
+          command -v dotnet
+          dotnet --list-sdks
+      - name: nopCommerce's source at release-5.00.1
+        run: scripts/nopcommerce.sh "$NOPCOMMERCE_DIR"
+      - name: The pinned copies (sdk/, vendor/)
+        run: dotnet run --project tools/Sattleme.Nop.Pins -c Release -- check
+      # Locked mode (Directory.Build.props, CI=true): a restore that would change a lockfile fails.
+      - name: Packages, from the lockfiles
+        run: dotnet restore Nop.Plugin.Payments.Sattleme.sln --locked-mode
+      - name: Build, and the plugin's archive
+        run: dotnet build Nop.Plugin.Payments.Sattleme.sln -c Release --no-restore
+      # After the build: the embedded projects compile copies the build writes (third-party code,
+      # not formatted here); nopCommerce's source, which the solution references, is nopCommerce's.
+      - name: Coding standard
+        run: dotnet format Nop.Plugin.Payments.Sattleme.sln --verify-no-changes --no-restore --exclude src/Embedded .nopcommerce
+      - name: Tests
+        run: dotnet test tests/Nop.Plugin.Payments.Sattleme.Tests -c Release --no-build
+      # The tests check it file by file (PackageTests); listed here for the record.
+      - name: The archive
+        run: |
+          python3 -I -m zipfile -l artifacts/Release/Payments.Sattleme-*.zip
+          if python3 -I -m zipfile -l artifacts/Release/Payments.Sattleme-*.zip | grep -E '(Sattleme\.Checkout|NBitcoin\.Secp256k1)\.dll'; then
+            echo "::error::The archive holds an assembly of the original names."
+            exit 1
+          fi
+      - name: Brand
+        run: scripts/brand.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Payments.Sattleme
+          path: artifacts/Release/Payments.Sattleme-*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  e2e:
+    name: End to end (nopCommerce 5.00.1's image, PostgreSQL 17)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.404
+      - name: nopCommerce's source at release-5.00.1
+        run: scripts/nopcommerce.sh "$NOPCOMMERCE_DIR"
+      # Builds the plugin's archive and the test-only fake (from the lockfiles, locked mode),
+      # installs them in nopCommerce's official image (pinned digest) on PostgreSQL, and does what a
+      # merchant and a customer do (e2e/drive.py); removes its containers and network.
+      - name: The end-to-end test
+        run: e2e/run.sh

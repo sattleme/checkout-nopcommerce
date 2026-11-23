@@ -1,0 +1,38 @@
+# Pull requests that keep the actions and the SDK up to date: one pull request per ecosystem,
+# grouping all its updates. Each waits a week after a release (cooldown): time for a compromised
+# release to be found and pulled before it reaches this repository.
+#
+# No NuGet updates: the lockfiles (packages.lock.json) of the tests, the plugin and the end-to-end
+# test's fake hold nopCommerce's packages, which only a restore with nopCommerce's source
+# (scripts/nopcommerce.sh) writes. Dependabot restores without it, and would write lockfiles the
+# CI's locked restore refuses: every one of its pull requests would fail. The tests' packages, the
+# only ones of this repository (Directory.Packages.props), are taken by hand (README.md,
+# "Dependencies"); the pinned copies (sdk/, vendor/) with tools/Sattleme.Nop.Pins.
+version: 2
+updates:
+  # The SHA-pinned actions of .github/workflows/, in one pull request.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The SDK of global.json, in one pull request: .NET 10's, the framework of nopCommerce 5.00, which
+  # the plugin targets and the tests run on (as nopCommerce's own global.json). A later major
+  # comes with a nopCommerce on its framework, by hand.
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      dotnet-sdk:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: dotnet-sdk
+        update-types: ["version-update:semver-major"]

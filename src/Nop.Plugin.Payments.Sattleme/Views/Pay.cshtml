@@ -1,0 +1,136 @@
+@model PaymentPageModel
+@{
+    Layout = "_ColumnsOne";
+    NopHtml.AddTitleParts(ViewText.Format(T("Plugins.Payments.Sattleme.Pay.Title"), Model.OrderNumber));
+    NopHtml.AddPageCssClassParts("html-sattleme-pay-page");
+    NopHtml.AddHeadCustomParts("<meta name=\"robots\" content=\"noindex, nofollow\" />");
+    NopHtml.AddCssFileParts(SattlemeDefaults.CONTENT + "pay.css", excludeFromBundle: true);
+    NopHtml.AddScriptParts(ResourceLocation.Footer, SattlemeDefaults.CONTENT + "pay.js", excludeFromBundle: true);
+    var underpaid = Model.Phase == "underpaid";
+}
+<div class="page sattleme-pay"
+     id="sattleme-pay"
+     data-status-url="@Model.StatusUrl"
+     data-version="@Model.Version"
+     data-poll="@Model.PollSeconds"
+     data-seconds-left="@Model.SecondsLeft"
+     data-copied="@T("Plugins.Payments.Sattleme.Pay.Copied").Text">
+    <div class="page-title">
+        <h1>@ViewText.Format(T("Plugins.Payments.Sattleme.Pay.Title"), Model.OrderNumber)</h1>
+    </div>
+    <div class="page-body">
+        @switch (Model.Phase)
+        {
+            case "open":
+            case "underpaid":
+                @if (underpaid)
+                {
+                    <p class="sattleme-pay-notice">@ViewText.Format(T("Plugins.Payments.Sattleme.Pay.Underpaid"), Model.ReceivedSats, Model.Sats)</p>
+                }
+                <div class="sattleme-pay-amount">
+                    <span class="sattleme-pay-label">@T(underpaid ? "Plugins.Payments.Sattleme.Pay.RemainingAmount" : "Plugins.Payments.Sattleme.Pay.Amount").Text</span>
+                    <strong class="sattleme-pay-sats">@Model.ToPaySats sats</strong>
+                    <span class="sattleme-pay-btc">@Model.ToPayBtc BTC</span>
+                    @if (!underpaid && Model.Price is not null)
+                    {
+                        <span class="sattleme-pay-price">@ViewText.Format(T("Plugins.Payments.Sattleme.Pay.OrderTotal"), Model.Price)</span>
+                    }
+                </div>
+                @if (Model.Uri is null)
+                {
+                    <p class="sattleme-pay-notice">@T("Plugins.Payments.Sattleme.Pay.RestPreparing").Text</p>
+                }
+                else
+                {
+                    <div class="sattleme-pay-code">
+                        @if (Model.QrSvg is not null)
+                        {
+                            <a class="sattleme-pay-qr" href="@Model.Uri" title="@T("Plugins.Payments.Sattleme.Pay.OpenWallet").Text">@Html.Raw(Model.QrSvg)</a>
+                        }
+                        <p class="sattleme-pay-scan">@T("Plugins.Payments.Sattleme.Pay.Scan").Text</p>
+                        <a class="button-1 sattleme-pay-open" href="@Model.Uri">@T("Plugins.Payments.Sattleme.Pay.OpenWallet").Text</a>
+                    </div>
+                    <div class="sattleme-pay-time">
+                        <span class="sattleme-pay-label">@T("Plugins.Payments.Sattleme.Pay.TimeLeft").Text</span>
+                        <strong data-countdown>@Model.TimeLeft</strong>
+                        <span>@ViewText.Format(T("Plugins.Payments.Sattleme.Pay.Until"), Model.Until)</span>
+                    </div>
+                    @if (Model.Lightning is not null)
+                    {
+                        <div class="sattleme-pay-copy">
+                            <label for="sattleme-lightning">@T("Plugins.Payments.Sattleme.Pay.LightningInvoice").Text</label>
+                            <textarea id="sattleme-lightning" readonly rows="3" spellcheck="false">@Model.Lightning</textarea>
+                            <button type="button" class="button-2" data-copy="sattleme-lightning" hidden>@T("Plugins.Payments.Sattleme.Pay.CopyLightning").Text</button>
+                        </div>
+                    }
+                    @if (Model.Address is not null)
+                    {
+                        <div class="sattleme-pay-copy">
+                            <label for="sattleme-address">@T("Plugins.Payments.Sattleme.Pay.Address").Text</label>
+                            <input id="sattleme-address" type="text" readonly spellcheck="false" value="@Model.Address" />
+                            <button type="button" class="button-2" data-copy="sattleme-address" hidden>@T("Plugins.Payments.Sattleme.Pay.CopyAddress").Text</button>
+                            <p class="sattleme-pay-hint">@ViewText.Format(T("Plugins.Payments.Sattleme.Pay.SendExactly"), Model.ToPayBtc)</p>
+                        </div>
+                    }
+                    @if (Model.HasOnchain)
+                    {
+                        <p class="sattleme-pay-hint">@T("Plugins.Payments.Sattleme.Pay.OnchainNote").Text</p>
+                    }
+                }
+                break;
+            case "ended":
+                <p class="sattleme-pay-notice">@T("Plugins.Payments.Sattleme.Pay.Ended").Text</p>
+                <p>@T("Plugins.Payments.Sattleme.Pay.EndedChecking").Text</p>
+                break;
+            case "unconfirmed":
+                <p class="sattleme-pay-notice">@ViewText.Format(T("Plugins.Payments.Sattleme.Pay.Unconfirmed"), Model.ReceivedSats)</p>
+                <p>@ViewText.Format(T("Plugins.Payments.Sattleme.Pay.Confirmations"), Model.Confirmations)</p>
+                <p>@T("Plugins.Payments.Sattleme.Pay.CanClose").Text</p>
+                break;
+            case "arrived":
+                <p class="sattleme-pay-notice">@T("Plugins.Payments.Sattleme.Pay.Arrived").Text</p>
+                <p>@T("Plugins.Payments.Sattleme.Pay.CanClose").Text</p>
+                break;
+            case "review":
+                <p class="sattleme-pay-notice">@T("Plugins.Payments.Sattleme.Pay.Review").Text</p>
+                break;
+            case "paid":
+                <p class="sattleme-pay-notice sattleme-pay-done">@T("Plugins.Payments.Sattleme.Pay.Paid").Text</p>
+                break;
+            case "expired":
+                @if (Model.HasReceived)
+                {
+                    <p class="sattleme-pay-notice">@ViewText.Format(T("Plugins.Payments.Sattleme.Pay.ExpiredUnderpaid"), Model.ReceivedSats, Model.Sats)</p>
+                }
+                else
+                {
+                    <p class="sattleme-pay-notice">@T("Plugins.Payments.Sattleme.Pay.Expired").Text</p>
+                }
+                break;
+            case "cancelled":
+                <p class="sattleme-pay-notice">@T("Plugins.Payments.Sattleme.Pay.Cancelled").Text</p>
+                break;
+            default:
+                <p class="sattleme-pay-notice">@T("Plugins.Payments.Sattleme.Pay.None").Text</p>
+                break;
+        }
+
+        @if (Model.CanMakeNew)
+        {
+            <form method="post" action="@Model.NewInvoiceUrl" class="sattleme-pay-new">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="button-1">@T(Model.Phase == "expired" ? "Plugins.Payments.Sattleme.Pay.NewInvoice" : "Plugins.Payments.Sattleme.Pay.GetInvoice").Text</button>
+            </form>
+        }
+
+        @if (Model.PollSeconds is not null)
+        {
+            <p class="sattleme-pay-updates" hidden>@T("Plugins.Payments.Sattleme.Pay.Updates").Text</p>
+            <noscript>
+                <p><a class="button-2" href="@Model.CheckUrl" rel="nofollow">@T("Plugins.Payments.Sattleme.Pay.Check").Text</a></p>
+            </noscript>
+        }
+
+        <p class="sattleme-pay-back"><a href="@Model.OrderUrl">@T("Plugins.Payments.Sattleme.Pay.BackToOrder").Text</a></p>
+    </div>
+</div>

@@ -1,0 +1,104 @@
+@model AdminOrderPaymentModel
+@inject Nop.Services.Common.IGenericAttributeService genericAttributeService
+@inject IWorkContext workContext
+@{
+    Layout = "";
+    const string hideAttribute = "OrderPage.HideSattlemeBlock";
+    var hide = await genericAttributeService.GetAttributeAsync<bool>(await workContext.GetCurrentCustomerAsync(), hideAttribute);
+}
+<nop-card asp-name="order-sattleme" asp-icon="fab fa-bitcoin" asp-title="@ViewText.Encoded(T("Plugins.Payments.Sattleme.Admin.Title"))" asp-hide-block-attribute-name="@hideAttribute" asp-hide="@hide" asp-advanced="false">
+    <div class="card-body">
+        @if (Model.Warning is not null)
+        {
+            <div class="callout bg-white text-warning">@Model.Warning</div>
+        }
+        <p>@T("Plugins.Payments.Sattleme.Admin.Refunds").Text</p>
+        @foreach (var invoice in Model.Invoices)
+        {
+            <table class="table table-bordered sattleme-invoice">
+                <tbody>
+                    <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.Reference").Text</th><td><code>@invoice.Reference</code></td></tr>
+                    <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.State").Text</th><td>@invoice.State</td></tr>
+                    @if (invoice.Error is not null)
+                    {
+                        <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.Error").Text</th><td class="text-danger">@invoice.Error</td></tr>
+                    }
+                    <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.Amount").Text</th><td>@invoice.Amount</td></tr>
+                    @if (invoice.Rate is not null)
+                    {
+                        <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.Rate").Text</th><td>@invoice.Rate</td></tr>
+                    }
+                    @if (invoice.Received is not null)
+                    {
+                        <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.Received").Text</th><td>@invoice.Received</td></tr>
+                    }
+                    @if (invoice.Confirmations is not null)
+                    {
+                        <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.Confirmations").Text</th><td>@invoice.Confirmations</td></tr>
+                    }
+                    @if (invoice.Address is not null)
+                    {
+                        <tr>
+                            <th scope="row">@T("Plugins.Payments.Sattleme.Admin.Address").Text</th>
+                            <td>
+                                @if (invoice.AddressLink)
+                                {
+                                    <a href="https://mempool.space/address/@invoice.Address" target="_blank" rel="noopener noreferrer"><code>@invoice.Address</code></a>
+                                }
+                                else
+                                {
+                                    <code>@invoice.Address</code>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (invoice.Txids.Count > 0)
+                    {
+                        <tr>
+                            <th scope="row">@T("Plugins.Payments.Sattleme.Admin.Transactions").Text</th>
+                            <td>
+                                @foreach (var txid in invoice.Txids)
+                                {
+                                    <div><a href="https://mempool.space/tx/@txid" target="_blank" rel="noopener noreferrer"><code>@txid</code></a></div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (invoice.Preimages.Count > 0)
+                    {
+                        <tr>
+                            <th scope="row">@T("Plugins.Payments.Sattleme.Admin.Preimages").Text</th>
+                            <td>
+                                @foreach (var preimage in invoice.Preimages)
+                                {
+                                    <div><code>@preimage</code></div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (invoice.Note is not null)
+                    {
+                        <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.Note").Text</th><td>@invoice.Note</td></tr>
+                    }
+                    <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.Created").Text</th><td>@invoice.Created</td></tr>
+                    @if (invoice.Expires is not null)
+                    {
+                        <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.Expires").Text</th><td>@invoice.Expires</td></tr>
+                    }
+                    @if (invoice.LastCheck is not null)
+                    {
+                        <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.LastCheck").Text</th><td>@invoice.LastCheck</td></tr>
+                    }
+                    @if (invoice.NextCheck is not null)
+                    {
+                        <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.NextCheck").Text</th><td>@invoice.NextCheck</td></tr>
+                    }
+                    @if (invoice.Shredded)
+                    {
+                        <tr><th scope="row">@T("Plugins.Payments.Sattleme.Admin.Privacy").Text</th><td>@T("Plugins.Payments.Sattleme.Admin.Shredded").Text</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</nop-card>

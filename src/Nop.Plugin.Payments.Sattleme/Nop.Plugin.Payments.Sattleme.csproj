@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The plugin, built as nopCommerce's documentation shows for a plugin ("How to write a plugin for
+    nopCommerce 5.00"): a class library of net10.0 referencing nopCommerce's framework project, here
+    from its source at the pinned commit ($(NopCommerceDir), scripts/nopcommerce.sh). nopCommerce's
+    own assemblies are not copied to the output (the host has them: each of its projects is
+    referenced with Private="false", where nopCommerce's own plugins delete them after the build
+    with its ClearPluginAssemblies tool). The embedded SDK and its dependencies are (src/Embedded).
+  -->
+  <PropertyGroup>
+    <AssemblyName>Nop.Plugin.Payments.Sattleme</AssemblyName>
+    <RootNamespace>Nop.Plugin.Payments.Sattleme</RootNamespace>
+    <Description>Bitcoin payments, in Lightning or on-chain, straight to the merchant's sattle.me wallet.</Description>
+    <IsPackable>false</IsPackable>
+    <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
+    <PreserveCompilationContext>false</PreserveCompilationContext>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(NopCommerceDir)src/Libraries/Nop.Core/Nop.Core.csproj" Private="false" />
+    <ProjectReference Include="$(NopCommerceDir)src/Libraries/Nop.Data/Nop.Data.csproj" Private="false" />
+    <ProjectReference Include="$(NopCommerceDir)src/Libraries/Nop.Services/Nop.Services.csproj" Private="false" />
+    <ProjectReference Include="$(NopWebFrameworkProject)" Private="false" />
+    <ProjectReference Include="../Embedded/Secp256k1/Nop.Plugin.Payments.Sattleme.Secp256k1.csproj" />
+    <ProjectReference Include="../Embedded/Checkout/Nop.Plugin.Payments.Sattleme.Sdk.csproj" />
+    <ProjectReference Include="../Embedded/QrCode/Nop.Plugin.Payments.Sattleme.QrCode.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="plugin.json;logo.png;Views/**;Content/**;Localization/**" />
+    <Content Include="plugin.json;logo.png;Views/**/*.cshtml;Content/**;Localization/*.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!--
+    The plugin's archive, as nopCommerce installs it (Admin → Configuration → Local plugins → Upload
+    plugin or theme): one folder, Payments.Sattleme, holding plugin.json. Only what the plugin needs
+    goes in it, named one by one: its four assemblies (no Sattleme.Checkout.dll nor
+    NBitcoin.Secp256k1.dll: README.md, "How the SDK is embedded"), its views, script, style,
+    translations, logo, and the licenses. artifacts/<configuration>/Payments.Sattleme/ is the folder,
+    artifacts/<configuration>/Payments.Sattleme-<version>.zip the archive; the tests check both.
+  -->
+  <PropertyGroup>
+    <PluginPackageRoot>$(RepositoryRoot)artifacts/$(Configuration)/</PluginPackageRoot>
+    <PluginPackageStage>$(PluginPackageRoot)stage/</PluginPackageStage>
+    <PluginPackageDir>$(PluginPackageStage)Payments.Sattleme/</PluginPackageDir>
+    <PluginArchive>$(PluginPackageRoot)Payments.Sattleme-$(Version).zip</PluginArchive>
+  </PropertyGroup>
+
+  <Target Name="PackagePlugin" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <PluginFile Include="$(OutDir)Nop.Plugin.Payments.Sattleme.dll;$(OutDir)Nop.Plugin.Payments.Sattleme.Sdk.dll;$(OutDir)Nop.Plugin.Payments.Sattleme.Secp256k1.dll;$(OutDir)Nop.Plugin.Payments.Sattleme.QrCode.dll" />
+      <PluginFile Include="plugin.json;logo.png" />
+      <PluginFile Include="Views/*.cshtml" PackagePath="Views/" />
+      <PluginFile Include="Content/pay.js;Content/pay.css" PackagePath="Content/" />
+      <PluginFile Include="Localization/*.xml" PackagePath="Localization/" />
+      <PluginLicense Include="$(RepositoryRoot)LICENSE" PackageName="LICENSE" />
+      <PluginLicense Include="$(RepositoryRoot)sdk/LICENSE" PackageName="Sattleme.Checkout.LICENSE" />
+      <PluginLicense Include="$(RepositoryRoot)vendor/NBitcoin.Secp256k1/LICENSE" PackageName="NBitcoin.Secp256k1.LICENSE" />
+      <PluginLicense Include="$(RepositoryRoot)vendor/QrCodeGenerator/LICENSE" PackageName="QrCodeGenerator.LICENSE" />
+    </ItemGroup>
+    <RemoveDir Directories="$(PluginPackageStage)" />
+    <Delete Files="$(PluginArchive)" />
+    <Copy SourceFiles="@(PluginFile)" DestinationFiles="@(PluginFile->'$(PluginPackageDir)%(PackagePath)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(PluginLicense)" DestinationFiles="@(PluginLicense->'$(PluginPackageDir)licenses/%(PackageName)')" />
+    <ZipDirectory SourceDirectory="$(PluginPackageStage)" DestinationFile="$(PluginArchive)" Overwrite="true" />
+    <Message Importance="high" Text="Payments.Sattleme -> $(PluginArchive)" />
+  </Target>
+
+</Project>

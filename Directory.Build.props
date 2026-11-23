@@ -1,0 +1,51 @@
+<Project>
+  <!--
+    Every project of this repository: nopCommerce 5.00's framework (net10.0), the same compiler and
+    the same rules, warnings as errors. nopCommerce's own projects, built from its source in
+    $(NopCommerceDir), use their own Directory.Build.props, never this one.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <MSBuildTreatWarningsAsErrors>true</MSBuildTreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Deterministic>true</Deterministic>
+    <Features>strict</Features>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- XML documentation everywhere: the build reports unused usings (IDE0005) only with it. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Authors>sattle.me</Authors>
+    <Company>sattle.me</Company>
+    <Copyright>Copyright (c) 2026 Swiss Bitcoin Pay Sàrl</Copyright>
+    <Product>sattle.me for nopCommerce</Product>
+    <Version>1.0.0</Version>
+    <RepositoryUrl>https://github.com/sattleme/checkout-nopcommerce</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <!-- Packages: one version each (Directory.Packages.props), every restore from the lockfiles. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- In CI (and scripts/check.sh), a restore that would change a lockfile fails. -->
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!--
+    nopCommerce's source at its pinned commit (scripts/nopcommerce.sh fetches it): the plugin is
+    built against its framework projects, as nopCommerce's documentation shows for plugins. Another
+    place: the environment variable NOPCOMMERCE_DIR, or -p:NopCommerceDir=….
+  -->
+  <PropertyGroup>
+    <RepositoryRoot>$(MSBuildThisFileDirectory)</RepositoryRoot>
+    <NopCommerceDir Condition="'$(NopCommerceDir)' == ''">$(NOPCOMMERCE_DIR)</NopCommerceDir>
+    <NopCommerceDir Condition="'$(NopCommerceDir)' == ''">$(RepositoryRoot).nopcommerce</NopCommerceDir>
+    <NopCommerceDir>$([MSBuild]::EnsureTrailingSlash('$(NopCommerceDir)'))</NopCommerceDir>
+    <NopWebFrameworkProject>$(NopCommerceDir)src/Presentation/Nop.Web.Framework/Nop.Web.Framework.csproj</NopWebFrameworkProject>
+  </PropertyGroup>
+</Project>

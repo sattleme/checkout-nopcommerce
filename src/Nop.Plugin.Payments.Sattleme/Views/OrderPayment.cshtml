@@ -1,0 +1,21 @@
+@model OrderPaymentModel
+@{
+    Layout = "";
+}
+<div class="sattleme-order-payment">
+    <p>
+        <strong>@T("Plugins.Payments.Sattleme.Order.Title").Text</strong>
+        @if (Model.HasReceived)
+        {
+            @ViewText.Format(T("Plugins.Payments.Sattleme.Order.Status.expiredUnderpaid"), Model.ReceivedSats, Model.Sats)
+        }
+        else
+        {
+            @ViewText.Format(T("Plugins.Payments.Sattleme.Order.Status." + Model.Phase), Model.Until)
+        }
+    </p>
+    @if (Model.ShowPayLink)
+    {
+        <p><a class="button-2" href="@Model.PayUrl" rel="nofollow noreferrer">@T("Plugins.Payments.Sattleme.Order.Pay").Text</a></p>
+    }
+</div>
