@@ -11,16 +11,28 @@ ends unpaid (the customer may cancel it, or get a new invoice) and whose new inv
 (the customer may no longer cancel it nor retry its payment, and its page says what came); then
 uninstalls both plugins.
 
+With --screenshots <dir>, it also keeps screenshots of the plugin's pages, as they are at those
+steps, for nopCommerce's marketplace: the payment page, the configuration page, and the admin's
+block of a paid order (Screenshots, below).
+
 Python's standard library only; run with `python3 -I`.
 """
 
 import argparse
+import base64
+import fcntl
 import html
 import html.parser
 import http.cookiejar
 import json
+import os
 import re
+import select
+import shutil
+import struct
+import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -563,6 +575,173 @@ def underpaid_order(browser, placed):
     step(f"order {order_id}: its underpayment is noted, and the customer can neither cancel it nor retry its payment")
 
 
+class Screenshots:
+    """Screenshots of the shop's pages, as a customer's or the admin's browser shows them: Google
+    Chrome, headless, with the cookies of this test's session, driven over its DevTools protocol
+    through a pipe (--remote-debugging-pipe: JSON messages, each ended by a NUL byte, that Chrome
+    reads on its file descriptor 3 and writes on its 4), so with Python's standard library only.
+
+    Chrome opens nothing but this test's own shop, on this machine: it runs without its sandbox,
+    which the runners' kernels may refuse to give it. Each screenshot is a PNG of 1280 pixels in
+    width at most, never less than 600 (what nopCommerce's marketplace asks of its pictures).
+    """
+
+    WIDTH = 1280
+    HEIGHT = 1000
+
+    def __init__(self, directory, browser, binary):
+        chrome = shutil.which(binary)
+        check(chrome is not None, f"no {binary} to take the screenshots with")
+        os.makedirs(directory, exist_ok=True)
+        self.directory = directory
+        self.browser = browser
+        self.profile = tempfile.mkdtemp(prefix="sattleme-e2e-chrome-")
+        self.buffer = b""
+        self.events = []
+        self.last = 0
+        self.process = None
+        # The pipes' ends Chrome gets, moved to descriptors 5 to 9: above 4, so that the shell's
+        # moves to 3 and 4 never overwrite one with the other, and of one digit, as POSIX's shell
+        # (dash) reads them.
+        commands_read, self.commands = os.pipe()
+        self.answers, answers_write = os.pipe()
+        theirs = [fcntl.fcntl(end, fcntl.F_DUPFD, 5) for end in (commands_read, answers_write)]
+        os.close(commands_read)
+        os.close(answers_write)
+        try:
+            check(all(end <= 9 for end in theirs), f"no free descriptors under 10 for Chrome's pipe: {theirs}")
+            script = f'exec "$0" "$@" 3<&{theirs[0]} 4>&{theirs[1]} {theirs[0]}<&- {theirs[1]}>&-'
+            self.process = subprocess.Popen(
+                ["/bin/sh", "-c", script, chrome, "--headless=new", "--remote-debugging-pipe",
+                 f"--user-data-dir={self.profile}", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
+                 "--no-proxy-server", "--disable-gpu", "--disable-extensions", "--disable-sync",
+                 "--disable-background-networking", "--hide-scrollbars", "--mute-audio", "about:blank"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=theirs)
+        except BaseException:
+            for end in theirs:
+                os.close(end)
+            self.close()
+            raise
+        for end in theirs:
+            os.close(end)
+        try:
+            target = self.call("Target.createTarget", {"url": "about:blank"})["targetId"]
+            self.session = self.call("Target.attachToTarget", {"targetId": target, "flatten": True})["sessionId"]
+            self.call("Page.enable", session=self.session)
+            self.call("Emulation.setDeviceMetricsOverride",
+                      {"width": self.WIDTH, "height": self.HEIGHT, "deviceScaleFactor": 1, "mobile": False}, session=self.session)
+        except BaseException:
+            self.close()
+            raise
+
+    def read(self, deadline):
+        while b"\0" not in self.buffer:
+            left = deadline - time.monotonic()
+            check(left > 0, "Chrome did not answer in time")
+            ready, _, _ = select.select([self.answers], [], [], left)
+            if ready:
+                chunk = os.read(self.answers, 1 << 20)
+                check(len(chunk) > 0, "Chrome stopped")
+                self.buffer += chunk
+        message, _, self.buffer = self.buffer.partition(b"\0")
+        return json.loads(message)
+
+    def call(self, method, params=None, session=None, timeout=60):
+        self.last += 1
+        message = {"id": self.last, "method": method, "params": params or {}}
+        if session is not None:
+            message["sessionId"] = session
+        data = json.dumps(message).encode() + b"\0"
+        while data:
+            data = data[os.write(self.commands, data):]
+        deadline = time.monotonic() + timeout
+        while True:
+            answer = self.read(deadline)
+            if answer.get("id") == self.last:
+                check("error" not in answer, f"Chrome refused {method}: {answer.get('error')}")
+                return answer.get("result", {})
+            if "method" in answer:
+                self.events.append(answer)
+
+    def wait_for(self, method, timeout=60):
+        deadline = time.monotonic() + timeout
+        while True:
+            for event in self.events:
+                if event["method"] == method and event.get("sessionId") == self.session:
+                    self.events.remove(event)
+                    return event
+            answer = self.read(deadline)
+            if "method" in answer:
+                self.events.append(answer)
+
+    def evaluate(self, expression):
+        result = self.call("Runtime.evaluate", {"expression": expression, "returnByValue": True, "awaitPromise": True},
+                           session=self.session)
+        check("exceptionDetails" not in result, f"the page's script failed: {result.get('exceptionDetails')}")
+        return result["result"].get("value")
+
+    def take(self, name, path, selector, frame):
+        """The page at path, once loaded with its fonts: the whole first screen ("screen"), the page
+        from its top down to the element of selector ("down_to"), or that element alone
+        ("element"), with a margin; the element must be on the page either way."""
+        self.events.clear()
+        cookies = [{"name": cookie.name, "value": cookie.value, "url": self.browser.base + "/", "path": cookie.path or "/",
+                    "httpOnly": cookie.has_nonstandard_attr("HttpOnly")} for cookie in self.browser.jar]
+        if cookies:
+            self.call("Network.setCookies", {"cookies": cookies}, session=self.session)
+        navigated = self.call("Page.navigate", {"url": self.browser.base + path}, session=self.session)
+        check("errorText" not in navigated, f"Chrome could not open {path}: {navigated.get('errorText')}")
+        self.wait_for("Page.loadEventFired")
+        self.evaluate("document.fonts.ready.then(() => true)")
+        time.sleep(1)
+        check(self.evaluate("location.pathname") == urllib.parse.urlsplit(path).path,
+              f"Chrome was sent elsewhere than {path}: {self.evaluate('location.href')}")
+        box = self.evaluate(
+            "(() => { const element = document.querySelector(" + json.dumps(selector) + "); if (!element) return null;"
+            " const box = element.getBoundingClientRect();"
+            " return { x: box.left + window.scrollX, y: box.top + window.scrollY, width: box.width, height: box.height }; })()")
+        check(box is not None, f"no {selector} on {path} in Chrome")
+        check(box["width"] > 0 and box["height"] > 0, f"{selector} is not shown on {path} in Chrome")
+        params = {"format": "png"}
+        if frame == "down_to":
+            params.update(clip={"x": 0, "y": 0, "width": self.WIDTH, "height": box["y"] + box["height"] + 24, "scale": 1},
+                          captureBeyondViewport=True)
+        elif frame == "element":
+            x = max(0.0, box["x"] - 16)
+            y = max(0.0, box["y"] - 16)
+            params.update(clip={"x": x, "y": y, "width": min(self.WIDTH - x, box["width"] + 32), "height": box["height"] + 32,
+                                "scale": 1}, captureBeyondViewport=True)
+        else:
+            check(frame == "screen", f"not a frame of a screenshot: {frame}")
+        png = base64.b64decode(self.call("Page.captureScreenshot", params, session=self.session, timeout=120)["data"])
+        check(png[:8] == b"\x89PNG\r\n\x1a\n", f"the screenshot of {path} is not a PNG")
+        width, height = struct.unpack(">II", png[16:24])
+        check(600 <= width <= self.WIDTH, f"the screenshot of {path} is {width} pixels wide")
+        file = os.path.join(self.directory, f"{name}.png")
+        with open(file, "wb") as output:
+            output.write(png)
+        step(f"screenshot {file} ({width}×{height})")
+
+    def close(self):
+        """Closes Chrome (killed if it does not stop) and removes its profile; once."""
+        if self.process is not None:
+            try:
+                self.call("Browser.close", timeout=10)
+            except (Failure, OSError):
+                pass
+            try:
+                self.process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait()
+            self.process = None
+        for end in ("commands", "answers"):
+            if getattr(self, end) is not None:
+                os.close(getattr(self, end))
+                setattr(self, end, None)
+        shutil.rmtree(self.profile, ignore_errors=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", required=True)
@@ -571,19 +750,37 @@ def main():
     parser.add_argument("--pg-password", required=True)
     parser.add_argument("--plugin", required=True)
     parser.add_argument("--fake", required=True)
+    parser.add_argument("--screenshots", help="the directory to keep screenshots of the plugin's pages in")
+    parser.add_argument("--chrome", default="google-chrome", help="the Google Chrome to take them with")
     args = parser.parse_args()
     browser = Browser(args.base, args.host)
+    screenshots = None
+    try:
+        install(browser, args)
+        login(browser)
+        upload_and_install(browser, [args.plugin, args.fake])
+        if args.screenshots:
+            screenshots = Screenshots(args.screenshots, browser, args.chrome)
+        run(browser, screenshots)
+    finally:
+        if screenshots is not None:
+            screenshots.close()
 
-    install(browser, args)
-    login(browser)
-    upload_and_install(browser, [args.plugin, args.fake])
+
+def run(browser, screenshots):
+    """What a merchant and a customer do, once the plugin is installed."""
     configure(browser)
+    if screenshots is not None:
+        screenshots.take("2-configuration", "/Admin/Sattleme/Configure",
+                         'form[action$="/Sattleme/Configure"], form[action$="/SattlemeAdmin/Configure"]', "screen")
 
     step("placing an order with the Bitcoin payment method")
     location = place_order(browser)
     placed = time.monotonic()
     step(f"on the payment page {location[:32]}…")
     order_id = check_page(browser, location)
+    if screenshots is not None:
+        screenshots.take("1-payment-page", location, "#sattleme-pay", "down_to")
     reference = pay_last_invoice(browser)
     step(f"the fake paid {reference}; the page's status checks it")
     time.sleep(6)
@@ -610,6 +807,8 @@ def main():
           f"no note of the Lightning payment: {notes}")
     check(not any("bc1p" in note or "lnbc" in note for note in notes), "a note holds an address or an invoice")
     step(f"order {order_id} is paid, its capture transaction {reference}; its notes and the admin's block say so")
+    if screenshots is not None:
+        screenshots.take("3-admin-order", f"/Admin/Order/Edit/{order_id}", "#order-sattleme", "element")
 
     step("a second order, paid with no page open: the background checks find it")
     # nopCommerce's minimum interval between two orders of a customer: a minute

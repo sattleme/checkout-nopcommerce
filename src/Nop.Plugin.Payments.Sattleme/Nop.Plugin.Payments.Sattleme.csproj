@@ -37,10 +37,13 @@
 
   <!--
     The plugin's archive, as nopCommerce installs it (Admin → Configuration → Local plugins → Upload
-    plugin or theme): one folder, Payments.Sattleme, holding plugin.json. Only what the plugin needs
-    goes in it, named one by one: its four assemblies (no Sattleme.Checkout.dll nor
-    NBitcoin.Secp256k1.dll: README.md, "How the SDK is embedded"), its views, script, style,
-    translations, logo, and the licenses. artifacts/<configuration>/Payments.Sattleme/ is the folder,
+    plugin or theme): one folder, Payments.Sattleme, holding plugin.json, and beside it
+    uploadedItems.json, nopCommerce's list of what the archive holds (UploadService, its sample
+    Nop.Services/Plugins/Samples/uploadedItems.json), which nopCommerce's marketplace asks of every
+    package. Only what the plugin needs goes in the folder, named one by one: its four assemblies
+    (no Sattleme.Checkout.dll nor NBitcoin.Secp256k1.dll: README.md, "How the SDK is embedded"), its
+    views, script, style, translations, logo, and the licenses.
+    artifacts/<configuration>/stage/Payments.Sattleme/ is the folder,
     artifacts/<configuration>/Payments.Sattleme-<version>.zip the archive; the tests check both.
   -->
   <PropertyGroup>
@@ -66,6 +69,7 @@
     <Delete Files="$(PluginArchive)" />
     <Copy SourceFiles="@(PluginFile)" DestinationFiles="@(PluginFile->'$(PluginPackageDir)%(PackagePath)%(Filename)%(Extension)')" />
     <Copy SourceFiles="@(PluginLicense)" DestinationFiles="@(PluginLicense->'$(PluginPackageDir)licenses/%(PackageName)')" />
+    <Copy SourceFiles="uploadedItems.json" DestinationFolder="$(PluginPackageStage)" />
     <ZipDirectory SourceDirectory="$(PluginPackageStage)" DestinationFile="$(PluginArchive)" Overwrite="true" />
     <Message Importance="high" Text="Payments.Sattleme -> $(PluginArchive)" />
   </Target>

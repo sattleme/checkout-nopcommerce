@@ -1,0 +1,8 @@
+[
+  {
+    "Type": "Plugin",
+    "SupportedVersion": "5.00",
+    "DirectoryPath": "Payments.Sattleme/",
+    "SystemName": "Payments.Sattleme"
+  }
+]

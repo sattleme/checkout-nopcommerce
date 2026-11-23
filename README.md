@@ -83,7 +83,9 @@ the order's page has a block with its invoices.
 ## Installation
 
 The plugin is distributed on nopCommerce's marketplace, as an archive
-(`Payments.Sattleme-<version>.zip`, one folder `Payments.Sattleme` with its `plugin.json`):
+(`Payments.Sattleme-<version>.zip`: one folder `Payments.Sattleme` with its `plugin.json`, and
+beside it `uploadedItems.json`, nopCommerce's list of what an archive holds, which its marketplace
+asks of every package):
 
 1. **Admin → Configuration → Local plugins → Upload plugin or theme**, and choose the archive.
 2. Find **Bitcoin (sattle.me)** in the list (group "Payment methods"), and click **Install**.
@@ -464,7 +466,7 @@ too, without the key.
 ## Development
 
 The checks need the .NET SDK of `global.json` (10.0.404) and git; the end-to-end test, Docker and
-Python 3.
+Python 3, and Google Chrome for its screenshots.
 
 ```shell
 scripts/check.sh   # every check, as the CI runs them
@@ -481,7 +483,7 @@ e2e/run.sh         # the end-to-end test, with Docker
   tools/Sattleme.Nop.Pins -c Release -- check`), the packages from the lockfiles (`dotnet restore
   Nop.Plugin.Payments.Sattleme.sln --locked-mode`), the build in Release (nopCommerce's coding
   standard and .NET's analyzers at `latest-recommended`, nullable references, warnings as errors),
-  which also makes the archive (`artifacts/Release/Payments.Sattleme-1.0.0.zip`), the coding
+  which also makes the archive (`artifacts/Release/Payments.Sattleme-1.0.1.zip`), the coding
   standard (`dotnet format --verify-no-changes`, nopCommerce's `.editorconfig` rules), the tests,
   what the archive holds, and the brand (`scripts/brand.sh`).
 - **The tests** (NUnit, as nopCommerce's own; `tests/Nop.Plugin.Payments.Sattleme.Tests`) run
@@ -509,8 +511,15 @@ e2e/run.sh         # the end-to-end test, with Docker
   nopCommerce's log must hold no error of the plugin. The SDK is replaced there by a fake
   (`e2e/FakeSdk`, a test-only plugin installed beside it, never shipped: the plugin has no switch
   for it). `E2E_KEEP=1 e2e/run.sh` keeps the containers of a failed run, to look at them.
+  `E2E_SCREENSHOTS=<dir> e2e/run.sh` also keeps, in `<dir>`, screenshots of the plugin's pages as
+  the test goes (the payment page of an invoice to pay, the configuration page with its key saved,
+  and the admin's block of the paid order), the pictures of the marketplace's listing: Google
+  Chrome, headless (`google-chrome`, or `$E2E_CHROME`), opens them with the test's session, driven
+  by `e2e/drive.py` over its DevTools protocol through a pipe (Python's standard library only).
+  They show the fake's invoices.
 - **The CI** (`.github/workflows/ci.yml`) runs `scripts/check.sh`'s steps, and the end-to-end
-  test, on GitHub-hosted runners.
+  test, on GitHub-hosted runners, and keeps the archive (`Payments.Sattleme`) and the end-to-end
+  test's screenshots (`screenshots`, taken with the runner's Google Chrome) as its artifacts.
 - **The pinned copies.** `sdk/` holds the SDK's own files at a commit of
   [checkout-dotnet](https://github.com/sattleme/checkout-dotnet) (the project, its sources, and the
   vectors the tests run), unchanged, with `sdk/PIN.json` (the repository, the commit, the version,
@@ -544,8 +553,9 @@ The plugin is distributed on nopCommerce's marketplace only. A maintainer pushes
 [`release.yml`](.github/workflows/release.yml) runs the CI again, checks the tag, builds and tests
 the archive at that commit, and keeps it as the workflow's artifact, with the source zip the
 marketplace's review asks for and their SHA-256, in the `marketplace` environment once a
-maintainer approves. The marketplace has no publishing channel to push to: the team uploads the
-archive there (My extensions → Upload extension). There is no GitHub release.
+maintainer approves; its run keeps the CI's screenshots too, the pictures of the marketplace's
+listing. The marketplace has no publishing channel to push to: the team uploads the archive there
+(My extensions → Upload extension). There is no GitHub release.
 
 ## License
 

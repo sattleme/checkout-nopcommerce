@@ -4,7 +4,7 @@ name: CI
 # copies (sdk/, vendor/), the packages from the lockfiles, the build (analyzers, warnings as
 # errors) and the plugin's archive, the coding standard, the tests, what the archive holds, and
 # the brand: scripts/check.sh, step by step; and the end-to-end test in nopCommerce's official
-# image (e2e/run.sh, Docker).
+# image (e2e/run.sh, Docker), with its screenshots of the plugin's pages.
 on:
   pull_request:
   push:
@@ -92,6 +92,16 @@ jobs:
         run: scripts/nopcommerce.sh "$NOPCOMMERCE_DIR"
       # Builds the plugin's archive and the test-only fake (from the lockfiles, locked mode),
       # installs them in nopCommerce's official image (pinned digest) on PostgreSQL, and does what a
-      # merchant and a customer do (e2e/drive.py); removes its containers and network.
+      # merchant and a customer do (e2e/drive.py); removes its containers and network. On the way,
+      # screenshots of the plugin's pages for nopCommerce's marketplace, with the runner's Google
+      # Chrome.
       - name: The end-to-end test
         run: e2e/run.sh
+        env:
+          E2E_SCREENSHOTS: ${{ runner.temp }}/screenshots
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/screenshots/*.png
+          if-no-files-found: error
+          retention-days: 14

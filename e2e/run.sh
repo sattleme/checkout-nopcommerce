@@ -9,6 +9,9 @@
 #   SKIP_BUILD=1 e2e/run.sh   uses the archives already in artifacts/Release/
 #   E2E_KEEP=1 e2e/run.sh     keeps the containers and network of a failed run, to look at them
 #                             (it prints their names and the shop's address; remove them after)
+#   E2E_SCREENSHOTS=<dir> e2e/run.sh
+#                             also keeps screenshots of the plugin's pages in <dir>, taken with
+#                             Google Chrome (google-chrome, or $E2E_CHROME) as the test goes
 #
 # It never touches containers, volumes or images that are not its own; the images it pulls are
 # left for the next run (removed by the caller when done: docker image rm with the names below).
@@ -67,8 +70,12 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 
+screenshots=()
+if [ -n "${E2E_SCREENSHOTS:-}" ]; then
+  screenshots=(--screenshots "$E2E_SCREENSHOTS" --chrome "${E2E_CHROME:-google-chrome}")
+fi
 python3 -I e2e/drive.py --base "http://127.0.0.1:$port" --host localhost \
-  --pg-host "$database" --pg-password "$password" --plugin "$plugin" --fake "$fake"
+  --pg-host "$database" --pg-password "$password" --plugin "$plugin" --fake "$fake" "${screenshots[@]}"
 
 # Uninstalled, the plugin left no table behind (its migration's Down).
 tables=$(docker exec "$database" psql -U postgres -d nopcommerce -At \
