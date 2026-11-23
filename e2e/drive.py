@@ -25,6 +25,7 @@ import html
 import html.parser
 import http.cookiejar
 import json
+import math
 import os
 import re
 import select
@@ -581,9 +582,17 @@ class Screenshots:
     through a pipe (--remote-debugging-pipe: JSON messages, each ended by a NUL byte, that Chrome
     reads on its file descriptor 3 and writes on its 4), so with Python's standard library only.
 
+    Chrome sees the shop as this test does, under its host name (http://localhost/), through the
+    shop itself as its HTTP proxy: the requests reach Kestrel in absolute-form, which it takes
+    (RFC 9112, 3.2.2; Http1Connection.OnAbsoluteFormTarget), with the same Host header. The shop's
+    absolute URLs then work in Chrome too: nopCommerce caches some with the host of the request
+    that first built them (the default logo's path: CommonModelFactory.PrepareLogoModelAsync),
+    which is this test's.
+
     Chrome opens nothing but this test's own shop, on this machine: it runs without its sandbox,
     which the runners' kernels may refuse to give it. Each screenshot is a PNG of 1280 pixels in
-    width at most, never less than 600 (what nopCommerce's marketplace asks of its pictures).
+    width at most, never less than 600 (what nopCommerce's marketplace asks of its pictures), of a
+    page with no broken image.
     """
 
     WIDTH = 1280
@@ -595,6 +604,7 @@ class Screenshots:
         os.makedirs(directory, exist_ok=True)
         self.directory = directory
         self.browser = browser
+        self.origin = f"http://{browser.host}"
         self.profile = tempfile.mkdtemp(prefix="sattleme-e2e-chrome-")
         self.buffer = b""
         self.events = []
@@ -614,7 +624,8 @@ class Screenshots:
             self.process = subprocess.Popen(
                 ["/bin/sh", "-c", script, chrome, "--headless=new", "--remote-debugging-pipe",
                  f"--user-data-dir={self.profile}", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
-                 "--no-proxy-server", "--disable-gpu", "--disable-extensions", "--disable-sync",
+                 f"--proxy-server={browser.base}", "--proxy-bypass-list=<-loopback>",
+                 "--disable-gpu", "--disable-extensions", "--disable-sync",
                  "--disable-background-networking", "--hide-scrollbars", "--mute-audio", "about:blank"],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=theirs)
         except BaseException:
@@ -685,34 +696,54 @@ class Screenshots:
         from its top down to the element of selector ("down_to"), or that element alone
         ("element"), with a margin; the element must be on the page either way."""
         self.events.clear()
-        cookies = [{"name": cookie.name, "value": cookie.value, "url": self.browser.base + "/", "path": cookie.path or "/",
+        self.resize(self.HEIGHT)
+        cookies = [{"name": cookie.name, "value": cookie.value, "url": self.origin + "/", "path": cookie.path or "/",
                     "httpOnly": cookie.has_nonstandard_attr("HttpOnly")} for cookie in self.browser.jar]
         if cookies:
             self.call("Network.setCookies", {"cookies": cookies}, session=self.session)
-        navigated = self.call("Page.navigate", {"url": self.browser.base + path}, session=self.session)
+        navigated = self.call("Page.navigate", {"url": self.origin + path}, session=self.session)
         check("errorText" not in navigated, f"Chrome could not open {path}: {navigated.get('errorText')}")
         self.wait_for("Page.loadEventFired")
         self.evaluate("document.fonts.ready.then(() => true)")
         time.sleep(1)
         check(self.evaluate("location.pathname") == urllib.parse.urlsplit(path).path,
               f"Chrome was sent elsewhere than {path}: {self.evaluate('location.href')}")
-        box = self.evaluate(
-            "(() => { const element = document.querySelector(" + json.dumps(selector) + "); if (!element) return null;"
-            " const box = element.getBoundingClientRect();"
-            " return { x: box.left + window.scrollX, y: box.top + window.scrollY, width: box.width, height: box.height }; })()")
+        broken = self.evaluate("[...document.images].filter(image => image.complete && image.naturalWidth === 0).map(image => image.src)")
+        check(broken == [], f"broken images on {path} in Chrome: {broken}")
+        measure = ("(() => { const element = document.querySelector(" + json.dumps(selector) + "); if (!element) return null;"
+                   " const box = element.getBoundingClientRect();"
+                   " return { x: box.left + window.scrollX, y: box.top + window.scrollY, width: box.width, height: box.height,"
+                   " top: window.scrollY }; })()")
+        box = self.evaluate(measure)
         check(box is not None, f"no {selector} on {path} in Chrome")
         check(box["width"] > 0 and box["height"] > 0, f"{selector} is not shown on {path} in Chrome")
+        check(frame in ("screen", "down_to", "element"), f"not a frame of a screenshot: {frame}")
+        # Taken inside the window, never beyond it (a capture beyond the window lays the page out
+        # again, at another size, after the measure): the window made taller until what is taken
+        # fits in it, and measured again, as long as the page does not grow with it.
+        height = self.HEIGHT
+        for _ in range(4):
+            needed = math.ceil(box["y"] + box["height"] + 24 if frame == "down_to" else box["height"] + 32)
+            if frame == "screen" or needed <= height:
+                break
+            check(needed <= 8000, f"{selector} on {path} is too tall to be taken")
+            height = needed
+            self.resize(height)
+            box = self.evaluate(measure)
+        else:
+            check(False, f"{selector} on {path} moves as the window grows: it cannot be taken")
         params = {"format": "png"}
         if frame == "down_to":
-            params.update(clip={"x": 0, "y": 0, "width": self.WIDTH, "height": box["y"] + box["height"] + 24, "scale": 1},
-                          captureBeyondViewport=True)
+            self.evaluate("window.scrollTo(0, 0), true")
+            box = self.evaluate(measure)
+            params["clip"] = {"x": 0, "y": 0, "width": self.WIDTH, "height": min(height, box["y"] + box["height"] + 24), "scale": 1}
         elif frame == "element":
+            self.evaluate(f"window.scrollTo(0, {max(0.0, box['y'] - 16)}), true")
+            box = self.evaluate(measure)
             x = max(0.0, box["x"] - 16)
-            y = max(0.0, box["y"] - 16)
-            params.update(clip={"x": x, "y": y, "width": min(self.WIDTH - x, box["width"] + 32), "height": box["height"] + 32,
-                                "scale": 1}, captureBeyondViewport=True)
-        else:
-            check(frame == "screen", f"not a frame of a screenshot: {frame}")
+            y = max(box["top"], box["y"] - 16)
+            bottom = min(box["top"] + height, box["y"] + box["height"] + 16)
+            params["clip"] = {"x": x, "y": y, "width": min(self.WIDTH - x, box["width"] + 32), "height": bottom - y, "scale": 1}
         png = base64.b64decode(self.call("Page.captureScreenshot", params, session=self.session, timeout=120)["data"])
         check(png[:8] == b"\x89PNG\r\n\x1a\n", f"the screenshot of {path} is not a PNG")
         width, height = struct.unpack(">II", png[16:24])
@@ -721,6 +752,12 @@ class Screenshots:
         with open(file, "wb") as output:
             output.write(png)
         step(f"screenshot {file} ({width}×{height})")
+
+    def resize(self, height):
+        """The window 1280 pixels wide and height tall, once the page is laid out again."""
+        self.call("Emulation.setDeviceMetricsOverride",
+                  {"width": self.WIDTH, "height": height, "deviceScaleFactor": 1, "mobile": False}, session=self.session)
+        self.evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))")
 
     def close(self):
         """Closes Chrome (killed if it does not stop) and removes its profile; once."""

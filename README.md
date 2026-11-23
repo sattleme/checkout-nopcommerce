@@ -514,9 +514,10 @@ e2e/run.sh         # the end-to-end test, with Docker
   `E2E_SCREENSHOTS=<dir> e2e/run.sh` also keeps, in `<dir>`, screenshots of the plugin's pages as
   the test goes (the payment page of an invoice to pay, the configuration page with its key saved,
   and the admin's block of the paid order), the pictures of the marketplace's listing: Google
-  Chrome, headless (`google-chrome`, or `$E2E_CHROME`), opens them with the test's session, driven
-  by `e2e/drive.py` over its DevTools protocol through a pipe (Python's standard library only).
-  They show the fake's invoices.
+  Chrome, headless (`google-chrome`, or `$E2E_CHROME`), opens them with the test's session and
+  under its host name (the shop being Chrome's proxy), driven by `e2e/drive.py` over its DevTools
+  protocol through a pipe (Python's standard library only); a page with a broken image, or whose
+  element cannot be framed, fails the test. They show the fake's invoices.
 - **The CI** (`.github/workflows/ci.yml`) runs `scripts/check.sh`'s steps, and the end-to-end
   test, on GitHub-hosted runners, and keeps the archive (`Payments.Sattleme`) and the end-to-end
   test's screenshots (`screenshots`, taken with the runner's Google Chrome) as its artifacts.
