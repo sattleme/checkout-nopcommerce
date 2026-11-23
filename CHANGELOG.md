@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1 - 2026-11-23
+
+- The archive holds `uploadedItems.json` beside the plugin's folder: nopCommerce's list of what an
+  archive holds, which its marketplace asks of every package. nopCommerce then deploys the plugin
+  from the folder it names (`Payments.Sattleme/`), for the versions it supports (`5.00`), as
+  `plugin.json` says; the plugin itself is unchanged.
+- The end-to-end test can keep screenshots of the plugin's pages (`E2E_SCREENSHOTS`), which the CI
+  keeps as its artifact `screenshots`: the pictures of the marketplace's listing.
+
 ## 1.0.0 - 2026-11-23
 
 First version: Bitcoin payments, in Lightning or on-chain, to the merchant's sattle.me wallet, for

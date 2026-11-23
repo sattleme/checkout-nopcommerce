@@ -51,13 +51,14 @@ public sealed class PackageTests
     }
 
     [Test]
-    public void The_archive_holds_one_folder_with_the_plugin_s_files_only()
+    public void The_archive_holds_its_list_of_items_and_one_folder_with_the_plugin_s_files_only()
     {
         Assert.That(File.Exists(Repository.Archive), Is.True, Repository.Archive);
         using var archive = ZipFile.OpenRead(Repository.Archive);
         var entries = archive.Entries.Where(entry => entry.Name.Length > 0).Select(entry => entry.FullName.Replace('\\', '/')).Order(StringComparer.Ordinal).ToList();
 
-        var expected = _assemblies.Select(name => "Payments.Sattleme/" + name)
+        var expected = new[] { "uploadedItems.json" }
+            .Concat(_assemblies.Select(name => "Payments.Sattleme/" + name))
             .Concat(["Payments.Sattleme/plugin.json", "Payments.Sattleme/logo.png"])
             .Concat(Directory.GetFiles(Path.Combine(Repository.Plugin, "Views"), "*.cshtml").Select(file => "Payments.Sattleme/Views/" + Path.GetFileName(file)))
             .Concat(["Payments.Sattleme/Content/pay.js", "Payments.Sattleme/Content/pay.css"])
@@ -92,21 +93,55 @@ public sealed class PackageTests
         yield return typeof(NopSattleme.Net.Codecrete.QrCodeGenerator.QrCode).Assembly;
     }
 
+    /// <summary>
+    /// nopCommerce reads the archive's uploadedItems.json (UploadService.GetUploadedItemsAsync) and
+    /// then deploys each item it lists whose SupportedVersion holds its own version, from the folder
+    /// it names, whose plugin.json must be there (UploadService.UploadMultipleItemsAsync): the list
+    /// names the plugin's one folder, its system name, and its supported versions as plugin.json does.
+    /// </summary>
     [Test]
-    public void The_archive_s_plugin_json_describes_version_1_0_0_for_nopCommerce_4_90()
+    public void The_archive_s_list_of_items_names_the_plugin_s_folder_as_its_plugin_json_does()
+    {
+        using var archive = ZipFile.OpenRead(Repository.Archive);
+        using var plugin = JsonDocument.Parse(Read(archive, "Payments.Sattleme/plugin.json"));
+        using var list = JsonDocument.Parse(Read(archive, "uploadedItems.json"));
+
+        var items = list.RootElement.EnumerateArray().ToList();
+        Assert.That(items, Has.Count.EqualTo(1));
+        var item = items[0];
+        Assert.That(item.EnumerateObject().Select(property => property.Name), Is.EquivalentTo(new[] { "Type", "SupportedVersion", "DirectoryPath", "SystemName" }));
+        Assert.That(item.GetProperty("Type").GetString(), Is.EqualTo("Plugin"));
+        Assert.That(item.GetProperty("DirectoryPath").GetString(), Is.EqualTo("Payments.Sattleme/"));
+        Assert.That(item.GetProperty("SystemName").GetString(), Is.EqualTo(plugin.RootElement.GetProperty("SystemName").GetString()));
+        Assert.That(item.GetProperty("SystemName").GetString(), Is.EqualTo(SattlemeDefaults.SYSTEM_NAME));
+        var supported = plugin.RootElement.GetProperty("SupportedVersions").EnumerateArray().Select(version => version.GetString()).ToList();
+        Assert.That(item.GetProperty("SupportedVersion").GetString(), Is.EqualTo(string.Join(", ", supported)));
+        Assert.That(archive.GetEntry(item.GetProperty("DirectoryPath").GetString() + "plugin.json"), Is.Not.Null);
+    }
+
+    private static string Read(ZipArchive archive, string name)
+    {
+        var entry = archive.GetEntry(name);
+        Assert.That(entry, Is.Not.Null, name);
+        using var reader = new StreamReader(entry!.Open());
+        return reader.ReadToEnd();
+    }
+
+    [Test]
+    public void The_archive_s_plugin_json_describes_version_1_0_1_for_nopCommerce_5_00()
     {
         using var archive = ZipFile.OpenRead(Repository.Archive);
         using var stream = archive.GetEntry("Payments.Sattleme/plugin.json")!.Open();
         using var document = JsonDocument.Parse(stream);
         var plugin = document.RootElement;
         Assert.That(plugin.GetProperty("SystemName").GetString(), Is.EqualTo(SattlemeDefaults.SYSTEM_NAME));
-        Assert.That(plugin.GetProperty("Version").GetString(), Is.EqualTo("1.0.0"));
+        Assert.That(plugin.GetProperty("Version").GetString(), Is.EqualTo("1.0.1"));
         Assert.That(plugin.GetProperty("SupportedVersions").EnumerateArray().Select(version => version.GetString()), Is.EqualTo(new[] { "5.00" }));
         Assert.That(plugin.GetProperty("FileName").GetString(), Is.EqualTo("Nop.Plugin.Payments.Sattleme.dll"));
         Assert.That(plugin.GetProperty("Group").GetString(), Is.EqualTo("Payment methods"));
         var authors = System.Xml.Linq.XDocument.Load(Repository.File("Directory.Build.props")).Descendants("Authors").Single().Value;
         Assert.That(plugin.GetProperty("Author").GetString(), Is.EqualTo(authors), "the author metadata: the name alone");
-        Assert.That(Repository.Version, Is.EqualTo("1.0.0"));
+        Assert.That(Repository.Version, Is.EqualTo("1.0.1"));
     }
 
     private static IEnumerable<(string Name, MetadataReader Reader, PEReader Pe)> Assemblies()
