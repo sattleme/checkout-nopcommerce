@@ -82,10 +82,11 @@ the order's page has a block with its invoices.
 
 ## Installation
 
-The plugin is distributed on nopCommerce's marketplace, as an archive
-(`Payments.Sattleme-<version>.zip`: one folder `Payments.Sattleme` with its `plugin.json`, and
-beside it `uploadedItems.json`, nopCommerce's list of what an archive holds, which its marketplace
-asks of every package):
+The plugin's archive (`Payments.Sattleme-<version>.zip`: one folder `Payments.Sattleme` with its
+`plugin.json`, and beside it `uploadedItems.json`, nopCommerce's list of what an archive holds,
+which its marketplace asks of every package) is in each of this repository's
+[Releases](https://github.com/sattleme/checkout-nopcommerce/releases), with its `SHA256SUMS`, and
+on nopCommerce's marketplace. Keep it as it is, without unzipping it:
 
 1. **Admin → Configuration → Local plugins → Upload plugin or theme**, and choose the archive.
    nopCommerce says "1 plugins and 0 themes have been uploaded": it keeps the plugin aside
@@ -489,7 +490,7 @@ e2e/run.sh         # the end-to-end test, with Docker
   tools/Sattleme.Nop.Pins -c Release -- check`), the packages from the lockfiles (`dotnet restore
   Nop.Plugin.Payments.Sattleme.sln --locked-mode`), the build in Release (nopCommerce's coding
   standard and .NET's analyzers at `latest-recommended`, nullable references, warnings as errors),
-  which also makes the archive (`artifacts/Release/Payments.Sattleme-1.0.1.zip`), the coding
+  which also makes the archive (`artifacts/Release/Payments.Sattleme-1.0.2.zip`), the coding
   standard (`dotnet format --verify-no-changes`, nopCommerce's `.editorconfig` rules), the tests,
   what the archive holds, and the brand (`scripts/brand.sh`).
 - **The tests** (NUnit, as nopCommerce's own; `tests/Nop.Plugin.Payments.Sattleme.Tests`) run
@@ -555,14 +556,17 @@ e2e/run.sh         # the end-to-end test, with Docker
 
 ## Releases
 
-The plugin is distributed on nopCommerce's marketplace only. A maintainer pushes a tag `vX.Y.Z`
-(the version of `Directory.Build.props` and `plugin.json`) on a commit of `main`;
+The plugin's archive is a release of this repository on GitHub, which the sattle.me app offers to
+download, and is on nopCommerce's marketplace. A maintainer pushes a tag `vX.Y.Z` (the version of
+`Directory.Build.props` and `plugin.json`) on a commit of `main`;
 [`release.yml`](.github/workflows/release.yml) runs the CI again, checks the tag, builds and tests
 the archive at that commit, and keeps it as the workflow's artifact, with the source zip the
 marketplace's review asks for and their SHA-256, in the `marketplace` environment once a
 maintainer approves; its run keeps the CI's screenshots too, the pictures of the marketplace's
-listing. The marketplace has no publishing channel to push to: the team uploads the archive there
-(My extensions → Upload extension). There is no GitHub release.
+listing. It then creates the GitHub release with the archive, the source zip and `SHA256SUMS`,
+each an asset of its own, with the workflow's own `GITHUB_TOKEN` (`contents: write` for that job
+alone, no stored secret). The marketplace has no publishing channel to push to: the team uploads
+the same archive there (My extensions → Upload extension).
 
 ## License
 

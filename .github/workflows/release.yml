@@ -3,9 +3,12 @@ name: Release
 # A maintainer pushes tag vX.Y.Z (= the plugin's version, on main): the checks run again, then the
 # plugin's archive is built at that commit, checked, and kept as this workflow's artifact, with the
 # source the marketplace asks for, from a job a maintainer approves (the protected environment
-# `marketplace`). The plugin is distributed on nopCommerce's marketplace only, which has no
-# publishing channel to push to: the team uploads the archive there (My extensions, Upload
-# extension). No GitHub release. Never from a development or agent session.
+# `marketplace`); then published as a GitHub release of this repository, with its SHA256SUMS: the
+# release the sattle.me app offers to download for nopCommerce (Admin → Configuration → Local
+# plugins → Upload plugin or theme), the archive itself as an asset, never inside another zip. The
+# marketplace has no publishing channel to push to: the team uploads the same archive there (My
+# extensions, Upload extension). Only the publishing job may write the repository's contents, with
+# this workflow's own GITHUB_TOKEN. Never from a development or agent session.
 on:
   push:
     tags: ["v*.*.*"]
@@ -47,12 +50,12 @@ jobs:
           fi
 
   archive:
-    name: The archive for nopCommerce's marketplace
+    name: The archive, built and tested at the tag
     needs: [checks, verify-tag]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     # The protected environment (required reviewers: a maintainer approves each release; deployment
-    # tags: v*). It holds no secret: nothing is published from here.
+    # tags: v*). It holds no secret: nothing is published from here, only by the job `publish`.
     environment: marketplace
     env:
       CI: "true"
@@ -92,3 +95,35 @@ jobs:
           path: ${{ runner.temp }}/release/
           if-no-files-found: error
           retention-days: 90
+
+  publish:
+    name: GitHub release
+    needs: [archive]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # The only job that writes: it creates the release, with this workflow's own token.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: Payments.Sattleme-${{ github.ref_name }}
+          path: ${{ runner.temp }}/release
+      - name: Checksums, again
+        working-directory: ${{ runner.temp }}/release
+        run: sha256sum --check --strict SHA256SUMS
+      # The archive nopCommerce takes as it is (uploadedItems.json and the folder Payments.Sattleme),
+      # its source and their SHA256SUMS, each an asset of its own: the sattle.me app downloads
+      # Payments.Sattleme-<version>.zip by that name.
+      - name: Release ${{ github.ref_name }}
+        working-directory: ${{ runner.temp }}/release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            "Payments.Sattleme-$version.zip" "checkout-nopcommerce-$version-source.zip" SHA256SUMS \
+            --verify-tag \
+            --title "sattle.me for nopCommerce $version" \
+            --notes "Bitcoin payments for nopCommerce 5.00, version $version: see CHANGELOG.md. Install: Admin → Configuration → Local plugins → Upload plugin or theme, with Payments.Sattleme-$version.zip as it is (not unzipped), restart, then install the plugin; check the archive against SHA256SUMS."

@@ -135,13 +135,13 @@ public sealed class PackageTests
         using var document = JsonDocument.Parse(stream);
         var plugin = document.RootElement;
         Assert.That(plugin.GetProperty("SystemName").GetString(), Is.EqualTo(SattlemeDefaults.SYSTEM_NAME));
-        Assert.That(plugin.GetProperty("Version").GetString(), Is.EqualTo("1.0.1"));
+        Assert.That(plugin.GetProperty("Version").GetString(), Is.EqualTo("1.0.2"));
         Assert.That(plugin.GetProperty("SupportedVersions").EnumerateArray().Select(version => version.GetString()), Is.EqualTo(new[] { "5.00" }));
         Assert.That(plugin.GetProperty("FileName").GetString(), Is.EqualTo("Nop.Plugin.Payments.Sattleme.dll"));
         Assert.That(plugin.GetProperty("Group").GetString(), Is.EqualTo("Payment methods"));
         var authors = System.Xml.Linq.XDocument.Load(Repository.File("Directory.Build.props")).Descendants("Authors").Single().Value;
         Assert.That(plugin.GetProperty("Author").GetString(), Is.EqualTo(authors), "the author metadata: the name alone");
-        Assert.That(Repository.Version, Is.EqualTo("1.0.1"));
+        Assert.That(Repository.Version, Is.EqualTo("1.0.2"));
     }
 
     private static IEnumerable<(string Name, MetadataReader Reader, PEReader Pe)> Assemblies()
