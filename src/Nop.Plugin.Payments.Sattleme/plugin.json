@@ -2,7 +2,7 @@
   "Group": "Payment methods",
   "FriendlyName": "Bitcoin (sattle.me)",
   "SystemName": "Payments.Sattleme",
-  "Version": "1.0.1",
+  "Version": "1.0.2",
   "SupportedVersions": [ "5.00" ],
   "Author": "sattle.me",
   "DisplayOrder": 1,

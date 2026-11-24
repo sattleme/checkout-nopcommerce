@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.2 - 2026-11-24
+
+- Each release is a GitHub release of this repository, made by the release workflow: the archive
+  `Payments.Sattleme-<version>.zip` as an asset of its own, which nopCommerce takes as it is, with
+  the source zip and their `SHA256SUMS`. The sattle.me app downloads that archive. The plugin itself
+  is unchanged.
+
 ## 1.0.1 - 2026-11-23
 
 - The archive holds `uploadedItems.json` beside the plugin's folder: nopCommerce's list of what an

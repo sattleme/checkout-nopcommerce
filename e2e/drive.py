@@ -589,10 +589,14 @@ class Screenshots:
     that first built them (the default logo's path: CommonModelFactory.PrepareLogoModelAsync),
     which is this test's.
 
-    Chrome opens nothing but this test's own shop, on this machine: it runs without its sandbox,
-    which the runners' kernels may refuse to give it. Each screenshot is a PNG of 1280 pixels in
-    width at most, never less than 600 (what nopCommerce's marketplace asks of its pictures), of a
-    page with no broken image.
+    Only that host goes through the shop: Chrome's own requests (accounts.google.com,
+    www.google.com, redirector.gvt1.com…, even with --disable-background-networking) would reach
+    Kestrel too, which answers a CONNECT with the home page, and the logo's URL would then be
+    cached with their host. Every host with a dot bypasses the proxy ("*.*"; the shop's has none),
+    and resolves to nothing (--host-resolver-rules): Chrome opens nothing but this test's own
+    shop, on this machine. It runs without its sandbox, which the runners' kernels may refuse to
+    give it. Each screenshot is a PNG of 1280 pixels in width at most, never less than 600 (what
+    nopCommerce's marketplace asks of its pictures), of a page with no broken image.
     """
 
     WIDTH = 1280
@@ -601,6 +605,7 @@ class Screenshots:
     def __init__(self, directory, browser, binary):
         chrome = shutil.which(binary)
         check(chrome is not None, f"no {binary} to take the screenshots with")
+        check("." not in browser.host, f"the shop's host must have no dot for Chrome's proxy rules: {browser.host}")
         os.makedirs(directory, exist_ok=True)
         self.directory = directory
         self.browser = browser
@@ -624,7 +629,8 @@ class Screenshots:
             self.process = subprocess.Popen(
                 ["/bin/sh", "-c", script, chrome, "--headless=new", "--remote-debugging-pipe",
                  f"--user-data-dir={self.profile}", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
-                 f"--proxy-server={browser.base}", "--proxy-bypass-list=<-loopback>",
+                 f"--proxy-server={browser.base}", "--proxy-bypass-list=<-loopback>;*.*",
+                 f"--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE {browser.host} , EXCLUDE 127.0.0.1",
                  "--disable-gpu", "--disable-extensions", "--disable-sync",
                  "--disable-background-networking", "--hide-scrollbars", "--mute-audio", "about:blank"],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=theirs)
